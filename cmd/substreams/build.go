@@ -156,7 +156,7 @@ func (p *ProtoBuilder) Build(ctx context.Context) error {
 
 	err := runCommandInDir(ctx, filepath.Dir(p.manifInfo.Path), defaultCmd)
 	if err != nil {
-		return fmt.Errorf("error running protogen: %w", err)
+		return fmt.Errorf("error running protogen: %w \n\n SUGGESTION: Upgrade Buf to the latest version", err)
 	}
 
 	fmt.Printf("Protogen complete.\n")
