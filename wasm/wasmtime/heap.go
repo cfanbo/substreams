@@ -30,7 +30,7 @@ func NewHeap(memory *wasmtime.Memory, allocator, dealloc *wasmtime.Func, store *
 }
 
 func writeOutputToHeap(i *instance, outputPtr int32, value []byte) error {
-	valuePtr, err := i.Heap.WriteAndTrack(value, false, "WriteOutputToHeap1")
+	valuePtr, err := i.Heap.WriteAndTrack(value, "WriteOutputToHeap1")
 	if err != nil {
 		return fmt.Errorf("writing value to heap: %w", err)
 	}
@@ -46,10 +46,10 @@ func writeOutputToHeap(i *instance, outputPtr int32, value []byte) error {
 }
 
 func (h *Heap) Write(bytes []byte, from string) (int32, error) {
-	return h.WriteAndTrack(bytes, true, from)
+	return h.WriteAndTrack(bytes, from)
 }
 
-func (h *Heap) WriteAndTrack(bytes []byte, track bool, from string) (int32, error) {
+func (h *Heap) WriteAndTrack(bytes []byte, from string) (int32, error) {
 	size := len(bytes)
 	results, err := h.allocator.Call(h.store, int32(size))
 	if err != nil {
@@ -58,9 +58,7 @@ func (h *Heap) WriteAndTrack(bytes []byte, track bool, from string) (int32, erro
 
 	ptr := results.(int32)
 
-	//fmt.Println("  writeToHeap/alloc:", ptr, size)
-
-	if track && size != 0 {
+	if size != 0 {
 		h.allocations = append(h.allocations, &allocation{ptr: ptr, length: size})
 	}
 	return h.WriteAtPtr(bytes, ptr, from)
