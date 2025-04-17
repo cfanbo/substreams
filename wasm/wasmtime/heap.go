@@ -30,6 +30,8 @@ func NewHeap(memory *wasmtime.Memory, allocator, dealloc *wasmtime.Func, store *
 }
 
 func writeOutputToHeap(i *instance, outputPtr int32, value []byte) error {
+	i.Heap.allocations = append(i.Heap.allocations, &allocation{ptr: outputPtr, length: 8})
+
 	valuePtr, err := i.Heap.WriteAndTrack(value, "WriteOutputToHeap1")
 	if err != nil {
 		return fmt.Errorf("writing value to heap: %w", err)
