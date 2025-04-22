@@ -29,6 +29,7 @@ require (
 require (
 	buf.build/gen/go/bufbuild/reflect/connectrpc/go v1.16.1-20240117202343-bf8f65e8876c.1
 	buf.build/gen/go/bufbuild/reflect/protocolbuffers/go v1.33.0-20240117202343-bf8f65e8876c.1
+	cloud.google.com/go/pubsub v1.45.3
 	connectrpc.com/connect v1.18.1
 	connectrpc.com/grpcreflect v1.2.0
 	github.com/RoaringBitmap/roaring v1.9.1
@@ -61,6 +62,7 @@ require (
 	github.com/protocolbuffers/protoscope v0.0.0-20221109213918-8e7a6aafa2c9
 	github.com/rs/cors v1.10.0
 	github.com/schollz/closestmatch v2.1.0+incompatible
+	github.com/segmentio/kafka-go v0.4.47
 	github.com/shopspring/decimal v1.3.1
 	github.com/streamingfast/dmetering v0.0.0-20241101155221-489f5a9d9139
 	github.com/streamingfast/dmetrics v0.0.0-20230919161904-206fa8ebd545
@@ -103,6 +105,7 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
+	github.com/pierrec/lz4/v4 v4.1.17 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/sahilm/fuzzy v0.1.1 // indirect
 	github.com/sercand/kuberesolver/v5 v5.1.1 // indirect

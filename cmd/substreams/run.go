@@ -2,22 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 
+	"cloud.google.com/go/pubsub"
 	"github.com/spf13/cobra"
 	"github.com/streamingfast/cli/sflags"
 	"github.com/streamingfast/substreams/client"
 	"github.com/streamingfast/substreams/manifest"
 	pbsubstreamsrpc "github.com/streamingfast/substreams/pb/sf/substreams/rpc/v2"
 	"github.com/streamingfast/substreams/tools"
-	"github.com/streamingfast/substreams/tools/test"
-	"github.com/streamingfast/substreams/tui"
-	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 func init() {
@@ -63,7 +58,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	outputMode := sflags.MustGetString(cmd, "output")
+	//outputMode := sflags.MustGetString(cmd, "output")
 
 	network := sflags.MustGetString(cmd, "network")
 	paramsString := sflags.MustGetStringArray(cmd, "params")
@@ -105,20 +100,20 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("extracting endpoint: %w", err)
 	}
 
-	msgDescs, err := manifest.BuildMessageDescriptors(pkgBundle.Package)
-	if err != nil {
-		return fmt.Errorf("building message descriptors: %w", err)
-	}
+	//msgDescs, err := manifest.BuildMessageDescriptors(pkgBundle.Package)
+	//if err != nil {
+	//	return fmt.Errorf("building message descriptors: %w", err)
+	//}
 
-	var testRunner *test.Runner
-	testFile := sflags.MustGetString(cmd, "test-file")
-	if testFile != "" {
-		zlog.Info("running test runner", zap.String(testFile, testFile))
-		testRunner, err = test.NewRunner(testFile, msgDescs, sflags.MustGetBool(cmd, "test-verbose"), zlog)
-		if err != nil {
-			return fmt.Errorf("failed to setup test runner: %w", err)
-		}
-	}
+	//var testRunner *test.Runner
+	//testFile := sflags.MustGetString(cmd, "test-file")
+	//if testFile != "" {
+	//	zlog.Info("running test runner", zap.String(testFile, testFile))
+	//	testRunner, err = test.NewRunner(testFile, msgDescs, sflags.MustGetBool(cmd, "test-verbose"), zlog)
+	//	if err != nil {
+	//		return fmt.Errorf("failed to setup test runner: %w", err)
+	//	}
+	//}
 
 	productionMode := sflags.MustGetBool(cmd, "production-mode")
 	debugModulesOutput := sflags.MustGetStringSlice(cmd, "debug-modules-output")
@@ -166,6 +161,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	)
 
 	ssClient, connClose, callOpts, headers, err := client.NewSubstreamsClient(substreamsClientConfig)
+	_ = headers
 	if err != nil {
 		return fmt.Errorf("substreams client setup: %w", err)
 	}
@@ -203,20 +199,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 		toPrint = []string{outputModule}
 	}
 
-	ui := tui.New(req, pkgBundle.Package, toPrint)
-	if err := ui.Init(outputMode); err != nil {
-		return fmt.Errorf("TUI initialization: %w", err)
-	}
-	defer ui.CleanUpTerminal()
-
 	streamCtx, cancel := context.WithCancel(ctx)
-	ui.OnTerminated(func(err error) {
-		if err != nil {
-			fmt.Printf("UI terminated with error %q\n", err)
-		}
-
-		cancel()
-	})
 	defer cancel()
 
 	// add additional authorization headers
@@ -234,48 +217,50 @@ func runRun(cmd *cobra.Command, args []string) error {
 		streamCtx = metadata.AppendToOutgoingContext(streamCtx, headerArray...)
 	}
 
-	ui.SetRequest(req)
-	ui.Connecting()
+	client, err := pubsub.NewClient(ctx, "dfuseio-local")
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	topic := client.Topic("test")
+
 	cli, err := ssClient.Blocks(streamCtx, req, callOpts...)
 	if err != nil && streamCtx.Err() != context.Canceled {
 		return fmt.Errorf("call sf.substreams.rpc.v2.Stream/Blocks: %w", err)
 	}
-	ui.Connected()
 
 	for {
 		resp, err := cli.Recv()
 		if resp != nil {
-			if err := ui.IncomingMessage(ctx, resp, testRunner); err != nil {
-				fmt.Printf("RETURN HANDLER ERROR: %s\n", err)
+			if data := resp.GetBlockScopedData(); data != nil {
+				fmt.Println(data.Clock)
+				if data.Output != nil {
+					msg := &pubsub.Message{
+						ID:   string(mustMarshalJSON(data.Clock)),
+						Data: data.Output.MapOutput.Value,
+					}
+					topic.Publish(ctx, msg)
+					if err != nil {
+						fmt.Println("Error writing message to Kafka:", err)
+					} else {
+						fmt.Printf("wrote %d bytes\n", len(msg.Data))
+					}
+
+				}
+			} else if session := resp.GetSession(); session != nil {
+				fmt.Println(session)
 			}
 		}
 		if err != nil {
-			if err == io.EOF {
-				ui.Cancel()
-				fmt.Fprintln(os.Stderr, "Total Read Bytes (server-side consumption):", ui.TotalReadBytes)
-				fmt.Fprintln(os.Stderr, "all done")
-				if testRunner != nil {
-					testRunner.LogResults()
-				}
-
-				return nil
-			}
-			if e, ok := status.FromError(err); ok {
-				if e.Code() == codes.FailedPrecondition {
-					if req.StopBlockNum == 0 {
-						return fmt.Errorf("%w\nHint: try setting a stop-block, ex: `substreams -s %d -t +1000 ...` or set the `--limit-processed-blocks` flag above %d, or 0 to disable the limit. ", err, ui.ResolvedStartBlock, ui.RequiredProcessedBlocks)
-					}
-					return fmt.Errorf("%w\nHint: try lowering your stop-block or setting the `--limit-processed-blocks` flag above %d, or 0 to disable the limit", err, ui.RequiredProcessedBlocks)
-				}
-			}
-
-			// Special handling if interrupted the context ourselves, no error
-			if streamCtx.Err() == context.Canceled {
-				ui.Cancel()
-				return nil
-			}
-
 			return err
 		}
 	}
+}
+
+func mustMarshalJSON(v interface{}) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
