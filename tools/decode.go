@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -8,18 +9,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/jhump/protoreflect/dynamic"
 	"github.com/spf13/cobra"
 	"github.com/streamingfast/cli"
 	"github.com/streamingfast/cli/sflags"
 	"github.com/streamingfast/dstore"
+	"github.com/twotwotwo/sorts"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/streamingfast/substreams/block"
 	"github.com/streamingfast/substreams/manifest"
+	pbindex "github.com/streamingfast/substreams/pb/sf/substreams/index/v1"
 	pbssinternal "github.com/streamingfast/substreams/pb/sf/substreams/intern/v2"
 	pbsubstreams "github.com/streamingfast/substreams/pb/sf/substreams/v1"
 	"github.com/streamingfast/substreams/storage/execout"
@@ -88,7 +92,11 @@ func init() {
 	decodeCmd.AddCommand(decodeStatesModuleCmd)
 	decodeCmd.AddCommand(decodeIndexModuleCmd)
 
+	// Set up the concatenate-index command flags
+	concatenateIndexCmd.Flags().Uint64("save-interval", 1000, "Save interval (segment size)")
+
 	Cmd.AddCommand(decodeCmd)
+	Cmd.AddCommand(concatenateIndexCmd)
 }
 
 func runDecodeStatesModuleRunE(cmd *cobra.Command, args []string) error {
@@ -258,7 +266,204 @@ func runDecodeIndexModuleRunE(cmd *cobra.Command, args []string) error {
 	}
 
 	indexFile.Print()
-	fmt.Printf("done")
+	sortedIndices := pbindex.SortedKV{
+		Kvs: make([]*pbindex.KV, len(indexFile.Indices)),
+	}
+
+	i := 0
+	for k, v := range indexFile.Indices {
+		b, err := v.ToBytes()
+		if err != nil {
+			return fmt.Errorf("converting index value to bytes: %w", err)
+		}
+		sortedIndices.Kvs[i] = &pbindex.KV{
+			Key:   k,
+			Value: b,
+		}
+		i++
+	}
+	sorts.ByString(&sortedIndices)
+	for _, kv := range sortedIndices.Kvs {
+		bm := roaring64.Bitmap{}
+
+		r := bytes.NewReader(kv.Value)
+		_, err := bm.ReadFrom(r)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s: %s\n", kv.Key, bm.String())
+	}
+
+	return nil
+}
+
+var concatenateIndexCmd = &cobra.Command{
+	Use:   "concatenate-index <store_url> <module_hash> <block_range>",
+	Short: "Concatenate multiple index files using the OR operation",
+	Args:  cobra.ExactArgs(3),
+	RunE:  runConcatenateIndex,
+	Example: string(cli.ExamplePrefixed("substreams tools concatenate-index", `
+		gs://bucket/path module_hash 1000:4000
+		file:///path/to/store module_hash 1000:4000
+	`)),
+}
+
+func runConcatenateIndex(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	saveInterval, err := cmd.Flags().GetUint64("save-interval")
+	if err != nil {
+		return fmt.Errorf("getting save-interval flag: %w", err)
+	}
+
+	storeURL := args[0]
+	moduleHash := args[1]
+	blockRangeStr := args[2]
+
+	// Use "index" as the fixed module name/subfolder
+	moduleName := "index"
+
+	// Parse the block range (format: startBlock:endBlock)
+	parts := strings.Split(blockRangeStr, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid block range format %q, expected format 'startBlock:endBlock'", blockRangeStr)
+	}
+
+	startBlock, err := strconv.ParseUint(parts[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("parsing start block %q: %w", parts[0], err)
+	}
+
+	endBlock, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return fmt.Errorf("parsing end block %q: %w", parts[1], err)
+	}
+
+	if startBlock >= endBlock {
+		return fmt.Errorf("start block %d must be less than end block %d", startBlock, endBlock)
+	}
+
+	// Adjust startBlock to segment boundary
+	startBlock = startBlock - (startBlock % saveInterval)
+
+	// Generate the list of block numbers for each segment
+	var blockNumbers []uint64
+	for blockNum := startBlock; blockNum < endBlock; blockNum += saveInterval {
+		blockNumbers = append(blockNumbers, blockNum)
+	}
+
+	zlog.Info("concatenating index files",
+		zap.String("store_url", storeURL),
+		zap.String("module_hash", moduleHash),
+		zap.String("block_range", blockRangeStr),
+		zap.Uint64("save_interval", saveInterval),
+		zap.Uint64s("segment_starts", blockNumbers),
+	)
+
+	// Initialize dstore
+	objStore, err := dstore.NewStore(storeURL, "zst", "zstd", false)
+	if err != nil {
+		return fmt.Errorf("initializing dstore for %q: %w", storeURL, err)
+	}
+
+	// Create a baseline index that will hold the concatenated result
+	var baselineIndex *index.File
+
+	// Process each block number
+	for _, blockNumber := range blockNumbers {
+		segmentEndBlock := blockNumber + saveInterval
+
+		// Create an index file for this block range
+		indexFile, err := index.NewFile(objStore, moduleHash, moduleName, zlog, block.NewRange(blockNumber, segmentEndBlock))
+		if err != nil {
+			return fmt.Errorf("instantiating index file for segment %d-%d: %w", blockNumber, segmentEndBlock, err)
+		}
+
+		// Load the index file
+		if err := indexFile.Load(ctx); err != nil {
+			zlog.Warn("skipping index file (not found or error)",
+				zap.Uint64("start_block", blockNumber),
+				zap.Uint64("end_block", segmentEndBlock),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		zlog.Info("loaded index file",
+			zap.Uint64("start_block", blockNumber),
+			zap.Uint64("end_block", segmentEndBlock),
+			zap.Int("indices_count", len(indexFile.Indices)),
+		)
+
+		// For the first valid segment, initialize the baseline
+		if baselineIndex == nil {
+			baselineIndex = indexFile
+			continue
+		}
+
+		// For subsequent segments, merge using OR operation
+		for k, v := range indexFile.Indices {
+			baseline := baselineIndex.Indices[k]
+			if baseline == nil {
+				baselineIndex.Indices[k] = v
+				continue
+			}
+			baseline.Or(v)
+		}
+	}
+
+	if baselineIndex == nil {
+		return fmt.Errorf("no valid index files loaded")
+	}
+
+	// Create a sorted output for writing to bigindex folder
+	sortedIndices := pbindex.SortedKV{
+		Kvs: make([]*pbindex.KV, len(baselineIndex.Indices)),
+	}
+
+	i := 0
+	for k, v := range baselineIndex.Indices {
+		b, err := v.ToBytes()
+		if err != nil {
+			return fmt.Errorf("converting index value to bytes: %w", err)
+		}
+		sortedIndices.Kvs[i] = &pbindex.KV{
+			Key:   k,
+			Value: b,
+		}
+		i++
+	}
+	sorts.ByString(&sortedIndices)
+
+	// Marshal the concatenated index
+	indexData, err := proto.Marshal(&sortedIndices)
+	if err != nil {
+		return fmt.Errorf("marshaling concatenated index: %w", err)
+	}
+
+	// Create bigindex subdirectory for the output
+	bigindexStore, err := objStore.SubStore(fmt.Sprintf("%s/bigindex", moduleHash))
+	if err != nil {
+		return fmt.Errorf("creating bigindex substore: %w", err)
+	}
+
+	// Create a filename that indicates the block range
+	outputFilename := fmt.Sprintf("%010d-%010d.index", startBlock, endBlock)
+
+	// Write the concatenated index to the bigindex folder
+	if err := bigindexStore.WriteObject(ctx, outputFilename, bytes.NewReader(indexData)); err != nil {
+		return fmt.Errorf("writing concatenated index to bigindex folder: %w", err)
+	}
+
+	zlog.Info("wrote concatenated index",
+		zap.String("output_file", outputFilename),
+		zap.Int("total_keys", len(baselineIndex.Indices)),
+	)
+
+	// Print some summary information
+	fmt.Printf("Concatenated %d index segments from block %d to %d\n", len(blockNumbers), startBlock, endBlock)
+	fmt.Printf("Total unique keys: %d\n", len(baselineIndex.Indices))
+	fmt.Printf("Output written to: %s/%s/bigindex/%s\n", storeURL, moduleHash, outputFilename)
 
 	return nil
 }

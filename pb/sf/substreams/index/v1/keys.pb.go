@@ -65,13 +65,114 @@ func (x *Keys) GetKeys() []string {
 	return nil
 }
 
+type KV struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KV) Reset() {
+	*x = KV{}
+	mi := &file_sf_substreams_index_v1_keys_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KV) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KV) ProtoMessage() {}
+
+func (x *KV) ProtoReflect() protoreflect.Message {
+	mi := &file_sf_substreams_index_v1_keys_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KV.ProtoReflect.Descriptor instead.
+func (*KV) Descriptor() ([]byte, []int) {
+	return file_sf_substreams_index_v1_keys_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *KV) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *KV) GetValue() []byte {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+type SortedKV struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kvs           []*KV                  `protobuf:"bytes,1,rep,name=kvs,proto3" json:"kvs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SortedKV) Reset() {
+	*x = SortedKV{}
+	mi := &file_sf_substreams_index_v1_keys_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SortedKV) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SortedKV) ProtoMessage() {}
+
+func (x *SortedKV) ProtoReflect() protoreflect.Message {
+	mi := &file_sf_substreams_index_v1_keys_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SortedKV.ProtoReflect.Descriptor instead.
+func (*SortedKV) Descriptor() ([]byte, []int) {
+	return file_sf_substreams_index_v1_keys_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SortedKV) GetKvs() []*KV {
+	if x != nil {
+		return x.Kvs
+	}
+	return nil
+}
+
 var File_sf_substreams_index_v1_keys_proto protoreflect.FileDescriptor
 
 const file_sf_substreams_index_v1_keys_proto_rawDesc = "" +
 	"\n" +
 	"!sf/substreams/index/v1/keys.proto\x12\x16sf.substreams.index.v1\"\x1a\n" +
 	"\x04Keys\x12\x12\n" +
-	"\x04keys\x18\x01 \x03(\tR\x04keysBLZJgithub.com/streamingfast/substreams/pb/sf/substreams/index/v1;pbsubstreamsb\x06proto3"
+	"\x04keys\x18\x01 \x03(\tR\x04keys\",\n" +
+	"\x02KV\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"8\n" +
+	"\bSortedKV\x12,\n" +
+	"\x03kvs\x18\x01 \x03(\v2\x1a.sf.substreams.index.v1.KVR\x03kvsBLZJgithub.com/streamingfast/substreams/pb/sf/substreams/index/v1;pbsubstreamsb\x06proto3"
 
 var (
 	file_sf_substreams_index_v1_keys_proto_rawDescOnce sync.Once
@@ -85,16 +186,19 @@ func file_sf_substreams_index_v1_keys_proto_rawDescGZIP() []byte {
 	return file_sf_substreams_index_v1_keys_proto_rawDescData
 }
 
-var file_sf_substreams_index_v1_keys_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_sf_substreams_index_v1_keys_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_sf_substreams_index_v1_keys_proto_goTypes = []any{
-	(*Keys)(nil), // 0: sf.substreams.index.v1.Keys
+	(*Keys)(nil),     // 0: sf.substreams.index.v1.Keys
+	(*KV)(nil),       // 1: sf.substreams.index.v1.KV
+	(*SortedKV)(nil), // 2: sf.substreams.index.v1.SortedKV
 }
 var file_sf_substreams_index_v1_keys_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: sf.substreams.index.v1.SortedKV.kvs:type_name -> sf.substreams.index.v1.KV
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_sf_substreams_index_v1_keys_proto_init() }
@@ -108,7 +212,7 @@ func file_sf_substreams_index_v1_keys_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sf_substreams_index_v1_keys_proto_rawDesc), len(file_sf_substreams_index_v1_keys_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

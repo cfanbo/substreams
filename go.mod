@@ -72,6 +72,7 @@ require (
 	github.com/test-go/testify v1.1.4
 	github.com/tetratelabs/wazero v1.8.0
 	github.com/tidwall/pretty v1.2.1
+	github.com/twotwotwo/sorts v0.0.0-20160814051341-bf5c1f2b8553
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
