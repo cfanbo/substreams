@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -444,6 +445,11 @@ func (p *Pipeline) runParallelProcess(ctx context.Context, reqPlan *plan.Request
 	}()
 
 	logger.Debug("starting parallel processing")
+
+	fmt.Println("about to backprocess", reqPlan.String())
+
+	parallelProcessor.Stages().CheckBigIndex()
+	os.Exit(0)
 
 	storeMap, err = parallelProcessor.Run(ctx, p.checkPendingShutdown)
 	if err != nil {

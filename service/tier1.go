@@ -726,6 +726,9 @@ func (s *Tier1Service) blocks(ctx context.Context, request *pbsubstreamsrpc.Requ
 	if err := pipe.Init(ctx); err != nil {
 		return fmt.Errorf("error during pipeline init: %w", err)
 	}
+
+	fmt.Println("about to backprocess", reqPlan.String())
+
 	loadedFromQuicksave, err := pipe.InitTier1StoresAndBackprocess(ctx, reqPlan, request.NoopMode)
 	if err != nil {
 		return fmt.Errorf("error during init_stores_and_backprocess: %w", err)

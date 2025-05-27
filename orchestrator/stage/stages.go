@@ -50,6 +50,8 @@ type Stages struct {
 	lastStatUpdate      time.Time
 	outputModuleIsIndex bool
 
+	executionGraph *exec.Graph
+
 	// If you're processing at 12M blocks, offset 12,000 segments, so you don't need to allocate 12k empty elements.
 	// Any previous segment is assumed to have completed successfully, and any stores that we sync'd prior to this offset
 	// are assumed to have been either fully loaded, or merged up until this offset.
@@ -79,6 +81,7 @@ func NewStages(
 		outputModuleIsIndex: execGraph.OutputModule().GetKindBlockIndex() != nil,
 		execoutConfigs:      execoutConfigs,
 		storeConfigs:        storeConfigs,
+		executionGraph:      execGraph,
 
 		hasLinearPipeline: reqPlan.LinearPipeline != nil,
 		storeSegmenter:    reqPlan.StoresSegmenter(),
@@ -157,6 +160,27 @@ func (s *Stages) LastStageCompleted() bool {
 		}
 	}
 	return true
+}
+
+func (s *Stages) CheckBigIndex() {
+
+	for _, mod := range s.executionGraph.UsedIndexModules() {
+		fmt.Println("used indexes", mod.Name)
+	}
+	_ = s.executionGraph.ModulesBlockfilterDependencies()
+
+	//	for i, stage := range s.executionStages {
+	//		for j, layer := range stage {
+	//			modulesWithFilter := make(map[string]bool)
+	//			for m, module := range layer {
+	//				if module.BlockFilter != nil {
+	//					modulesWithFilter[module.Name] = true
+	//					fmt.Println("got filter on stage i, layer j, module m", i, j, m)
+	//				}
+	//			}
+	//		}
+	//
+	// }
 }
 
 func (s *Stages) AllStoresCompleted() bool {

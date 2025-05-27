@@ -40,6 +40,103 @@ func (g *Graph) UsedIndexModules() []*pbsubstreams.Module {
 	return indexModules
 }
 
+func blockfiltersIdentical(left, right *pbsubstreams.Module_BlockFilter) bool {
+	if left.Module != right.Module {
+		return false
+	}
+	if left.Query == nil || right.Query == nil {
+		return false // these would be invalid anyway
+	}
+
+	// we only compare queries that are of type QueryString, for simplicity
+	leftQueryString, leftOk := left.Query.(*pbsubstreams.Module_BlockFilter_QueryString)
+	if !leftOk {
+		return false
+	}
+	rightQueryString, rightOk := right.Query.(*pbsubstreams.Module_BlockFilter_QueryString)
+	if !rightOk {
+		return false
+	}
+	return leftQueryString.QueryString == rightQueryString.QueryString
+}
+
+func dependsOnBlockFilters(moduleName string, modules map[string]*pbsubstreams.Module) *pbsubstreams.Module_BlockFilter {
+	module := modules[moduleName]
+
+	if module.BlockFilter != nil {
+		return module.BlockFilter
+	}
+
+	var parentFilter *pbsubstreams.Module_BlockFilter
+
+	for _, input := range module.Inputs {
+		switch inp := input.Input.(type) {
+
+		case *pbsubstreams.Module_Input_Source_:
+			return nil // if we depend on block source, we are unfiltered
+		case *pbsubstreams.Module_Input_Map_:
+			inputFilter := dependsOnBlockFilters(inp.Map.ModuleName, modules)
+			if inputFilter == nil {
+				return nil // if one of our mapper inputs is unfiltered, we are unfiltered
+			}
+			if parentFilter != nil {
+				if !blockfiltersIdentical(parentFilter, inputFilter) {
+					return nil // if multiple inputs have different filters, we are not filtered on a single index
+				}
+			}
+
+			parentFilter = inputFilter
+
+		case *pbsubstreams.Module_Input_Store_:
+			if inp.Store.Mode == pbsubstreams.Module_Input_Store_DELTAS {
+				inputFilter := dependsOnBlockFilters(inp.Store.ModuleName, modules)
+				if inputFilter == nil {
+					return nil // if one of our store deltas inputs is unfiltered, we are unfiltered
+				}
+				parentFilter = inputFilter
+			}
+
+		default:
+			// params, etc. don't affect block execution
+			continue
+		}
+	}
+
+	return nil
+
+}
+
+func (g *Graph) ModulesBlockfilterDependencies() map[string]*pbsubstreams.Module_BlockFilter {
+	deps := make(map[string]*pbsubstreams.Module_BlockFilter)
+
+	usedModulesMap := make(map[string]*pbsubstreams.Module)
+	for _, mod := range g.usedModules {
+		usedModulesMap[mod.Name] = mod
+	}
+
+	for name := range usedModulesMap {
+		if dep := dependsOnBlockFilters(name, usedModulesMap); dep != nil {
+			deps[name] = dep
+		}
+	}
+	// TODO: transform any QueryParams into string-based filter... maybe we need another simpler struct
+	fmt.Printf("Dependencies: %+v\n", deps)
+	return deps
+}
+
+/*
+
+map:
+module1: [blockfilter{modulename, querystring}, (parentblockfilter...), ...],
+module2: [],
+module3: [blockfilter{modulename, querystring}],
+
+stages:
+0: module1, module2
+1: module3
+
+*/
+
 func (g *Graph) UsedModulesUpToStage(stage int) (out []*pbsubstreams.Module) {
 	for i := 0; i <= int(stage); i++ {
 		for _, layer := range g.StagedUsedModules()[i] {
