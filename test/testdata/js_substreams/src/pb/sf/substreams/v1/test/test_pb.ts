@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sf/substreams/v1/test/test.proto.
  */
 export const file_sf_substreams_v1_test_test: GenFile = /*@__PURE__*/
-  fileDesc("CiBzZi9zdWJzdHJlYW1zL3YxL3Rlc3QvdGVzdC5wcm90bxIVc2Yuc3Vic3RyZWFtcy52MS50ZXN0IiMKBUJsb2NrEgoKAmlkGAEgASgJEg4KBm51bWJlchgCIAEoBCI1CglNYXBSZXN1bHQSFAoMYmxvY2tfbnVtYmVyGAEgASgEEhIKCmJsb2NrX2hhc2gYAiABKAkiGQoHQm9vbGVhbhIOCgZyZXN1bHQYASABKAgiFwoFQXJyYXkSDgoGcmVzdWx0GAEgAygJQlBaTmdpdGh1Yi5jb20vc3RyZWFtaW5nZmFzdC9zdWJzdHJlYW1zL3BiL3NmL3N1YnN0cmVhbXMvdjEvdGVzdC87cGJzdWJzdHJlYW1zdGVzdGIGcHJvdG8z");
+  fileDesc("CiBzZi9zdWJzdHJlYW1zL3YxL3Rlc3QvdGVzdC5wcm90bxIVc2Yuc3Vic3RyZWFtcy52MS50ZXN0IiMKBUJsb2NrEgoKAmlkGAEgASgJEg4KBm51bWJlchgCIAEoBCI1CglNYXBSZXN1bHQSFAoMYmxvY2tfbnVtYmVyGAEgASgEEhIKCmJsb2NrX2hhc2gYAiABKAkiGQoHQm9vbGVhbhIOCgZyZXN1bHQYASABKAgiFwoFQXJyYXkSDgoGcmVzdWx0GAEgAygJIhsKCkludDY0VmFsdWUSDQoFdmFsdWUYASABKANCUFpOZ2l0aHViLmNvbS9zdHJlYW1pbmdmYXN0L3N1YnN0cmVhbXMvcGIvc2Yvc3Vic3RyZWFtcy92MS90ZXN0LztwYnN1YnN0cmVhbXN0ZXN0YgZwcm90bzM");
 
 /**
  * @generated from message sf.substreams.v1.test.Block
@@ -89,4 +89,21 @@ export type Array = Message<"sf.substreams.v1.test.Array"> & {
  */
 export const ArraySchema: GenMessage<Array> = /*@__PURE__*/
   messageDesc(file_sf_substreams_v1_test_test, 3);
+
+/**
+ * @generated from message sf.substreams.v1.test.Int64Value
+ */
+export type Int64Value = Message<"sf.substreams.v1.test.Int64Value"> & {
+  /**
+   * @generated from field: int64 value = 1;
+   */
+  value: bigint;
+};
+
+/**
+ * Describes the message sf.substreams.v1.test.Int64Value.
+ * Use `create(Int64ValueSchema)` to create a new message.
+ */
+export const Int64ValueSchema: GenMessage<Int64Value> = /*@__PURE__*/
+  messageDesc(file_sf_substreams_v1_test_test, 4);
 

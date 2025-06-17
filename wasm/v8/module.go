@@ -31,17 +31,18 @@ func (mod *V8Module) ExecuteNewCall(
 	argValues map[string][]byte,
 ) (wasm.Instance, error) {
 
-	// Used to inject input, entry buffer
-	var input []byte
-	for _, val := range argValues {
-		input = val
-		break
-	}
-	if input == nil {
-		input = []byte{}
-	}
-
 	inst := getInstance(mod.iso, cachedInstance)
+
+	// Used to inject input, entry buffer
+	var inputs []*v8go.Value
+	for _, val := range argValues {
+		inputsVal, err := v8go.NewUint8Array(inst.ctx, val)
+		if err != nil {
+			inst.Close(ctx)
+			return nil, fmt.Errorf("creating Uint8Array from input: %w", err)
+		}
+		inputs = append(inputs, inputsVal)
+	}
 
 	// Runs all scripts (will be changed depending on files needed), probably going to merge all that are needed. This if makes sure we load our needed scripts ONLY on the first call
 	if cachedInstance == nil {
@@ -64,7 +65,7 @@ func (mod *V8Module) ExecuteNewCall(
 	}
 
 	// call the handlers from JS side
-	if err := callHandlers(inst, call, input); err != nil {
+	if err := callHandlers(inst, call, inputs); err != nil {
 		inst.Close(ctx)
 		return nil, err
 	}
@@ -113,7 +114,7 @@ func runJS(inst *V8Instance, code, filename string) error {
 }
 
 // callHandlers determines the type of handler (map, store) for a given module name and dispatches the execution to the appropriate handler function.
-func callHandlers(inst *V8Instance, call *wasm.Call, input []byte) error {
+func callHandlers(inst *V8Instance, call *wasm.Call, inputs []*v8go.Value) error {
 	handlerName := call.ModuleName
 
 	// Check the type of handler (map, store)
@@ -134,16 +135,16 @@ func callHandlers(inst *V8Instance, call *wasm.Call, input []byte) error {
 	// Dispatch to the appropriate handler
 	switch handlerTypeVal.String() {
 	case "map":
-		return callMapHandler(inst, handlerName, input)
+		return callMapHandler(inst, handlerName, inputs)
 	case "store":
-		return callStoreHandler(inst, handlerName, input)
+		return callStoreHandler(inst, handlerName, inputs)
 	default:
 		return fmt.Errorf("unknown handler type: %s", handlerTypeVal.String())
 	}
 }
 
 // Executes a map handler registered in the JS context.
-func callMapHandler(inst *V8Instance, handlerName string, input []byte) error {
+func callMapHandler(inst *V8Instance, handlerName string, inputs []*v8go.Value) error {
 	handlerVal, err := inst.ctx.Global().Get("executeMapHandler")
 	if err != nil {
 		return fmt.Errorf("could not get executeMapHandler: %w", err)
@@ -153,10 +154,19 @@ func callMapHandler(inst *V8Instance, handlerName string, input []byte) error {
 		return fmt.Errorf("executeMapHandler is not a function: %w", err)
 	}
 
-	nameVal, _ := v8go.NewValue(inst.ctx.Isolate(), handlerName)
-	inputVal, _ := v8go.NewUint8Array(inst.ctx, input)
-	result, err := handler.Call(v8go.Undefined(inst.ctx.Isolate()), nameVal, inputVal)
+	nameVal, err := v8go.NewValue(inst.ctx.Isolate(), handlerName)
+	if err != nil {
+		return fmt.Errorf("failed to create name string value: %w", err)
+	}
 
+	// Convert to []v8go.Valuer
+	vals := make([]v8go.Valuer, 0, len(inputs)+1)
+	vals = append(vals, nameVal)
+	for _, v := range inputs {
+		vals = append(vals, v)
+	}
+
+	result, err := handler.Call(v8go.Undefined(inst.ctx.Isolate()), vals...)
 	if err != nil {
 		return fmt.Errorf("failed to execute map handler: %w", err)
 	}
@@ -176,7 +186,7 @@ func callMapHandler(inst *V8Instance, handlerName string, input []byte) error {
 }
 
 // Executes a store handler registered in the JS context.
-func callStoreHandler(inst *V8Instance, handlerName string, input []byte) error {
+func callStoreHandler(inst *V8Instance, handlerName string, inputs []*v8go.Value) error {
 	storeFuncVal, err := inst.ctx.Global().Get("executeStoreHandler")
 	if err != nil {
 		return fmt.Errorf("could not get executeStoreHandler: %w", err)
@@ -187,18 +197,19 @@ func callStoreHandler(inst *V8Instance, handlerName string, input []byte) error 
 	}
 
 	nameVal, _ := v8go.NewValue(inst.ctx.Isolate(), handlerName)
-	outputVal, _ := v8go.NewUint8Array(inst.ctx, input)
 
-	// Define the store interface (JS object) that maps to the Go __store_set
-	storeInterfaceCode := `({ set: function(ordinal, key, value) {
-								__store_set(ordinal, key, value);
-							}})`
-	storeIface, err := inst.ctx.RunScript(storeInterfaceCode, "store_iface.js")
+	// Get the global store interface defined in the SDK
+	storeIface, err := inst.ctx.Global().Get("__store_interface")
 	if err != nil {
-		return fmt.Errorf("could not create store interface: %w", err)
+		return fmt.Errorf("could not get __store_interface: %w", err)
 	}
 
-	_, err = storeFunc.Call(v8go.Undefined(inst.ctx.Isolate()), nameVal, storeIface, outputVal)
+	vals := []v8go.Valuer{nameVal, storeIface}
+	for _, v := range inputs {
+		vals = append(vals, v)
+	}
+
+	_, err = storeFunc.Call(v8go.Undefined(inst.ctx.Isolate()), vals...)
 	return err
 }
 
@@ -251,7 +262,7 @@ func injectStoreFunction(ctx *v8go.Context, call *wasm.Call) error {
 		}
 
 		data := value.Uint8Array()
-		call.DoSet(uint64(ordinal), key, data)
+		call.DoSetIfNotExists(uint64(ordinal), key, data)
 		return nil
 	})
 

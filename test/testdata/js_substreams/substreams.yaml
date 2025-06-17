@@ -22,6 +22,7 @@ modules:
           - source: sf.substreams.v1.test.Block
       output:
           type: proto:sf.substreams.v1.test.MapResult
+
     - name: js_test_map_clock
       kind: map
       initialBlock: 10
@@ -29,3 +30,11 @@ modules:
           - source: sf.substreams.v1.test.Block
       output:
           type: proto:sf.substreams.v1.test.MapResult
+
+    - name: js_store_source_key
+      kind: store
+      updatePolicy: set
+      valueType: int64
+      initialBlock: 10
+      inputs:
+          - source: sf.substreams.v1.test.Block

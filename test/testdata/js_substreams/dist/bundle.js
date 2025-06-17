@@ -3383,6 +3383,11 @@
       this.storeInterface.set(ordinal, key, out);
     }
   };
+  globalThis.__store_interface = {
+    set(ordinal, key, value) {
+      globalThis.__store_set(ordinal, key, value);
+    }
+  };
   var handlerRegistry = /* @__PURE__ */ new Map();
   var substreams;
   ((substreams2) => {
@@ -3402,12 +3407,13 @@
         };
       }
       handlers2.map = map;
-      function store(storeType) {
+      function store(inputTypes, storeType) {
         return function(target, propertyKey, descriptor) {
           const handler = descriptor.value;
           const instance = new target.constructor();
           handlerRegistry.set(propertyKey, {
             type: "store",
+            inputTypes,
             handler,
             instance,
             storeType
@@ -3426,14 +3432,14 @@
     const result = registered.handler.call(registered.instance, ...inputs);
     return toBinary(registered.outputType, result);
   }
-  function executeStoreHandler(handlerName, storeInterface, inputBytes) {
+  function executeStoreHandler(handlerName, storeInterface, ...inputBytes) {
     const registered = handlerRegistry.get(handlerName);
     if (!registered || registered.type !== "store") {
       throw new Error(`Store handler '${handlerName}' not found`);
     }
     const store = new Store(storeInterface, registered.storeType);
-    const input = fromBinary(registered.storeType, inputBytes);
-    registered.handler.call(registered.instance, store, input);
+    const inputs = registered.inputTypes.map((type, i) => fromBinary(type, inputBytes[i]));
+    registered.handler.call(registered.instance, store, ...inputs);
   }
   function getHandlerType(handlerName) {
     return handlerRegistry.get(handlerName)?.type;
@@ -3466,7 +3472,7 @@
   }
 
   // src/pb/sf/substreams/v1/test/test_pb.ts
-  var file_sf_substreams_v1_test_test = /* @__PURE__ */ fileDesc("CiBzZi9zdWJzdHJlYW1zL3YxL3Rlc3QvdGVzdC5wcm90bxIVc2Yuc3Vic3RyZWFtcy52MS50ZXN0IiMKBUJsb2NrEgoKAmlkGAEgASgJEg4KBm51bWJlchgCIAEoBCI1CglNYXBSZXN1bHQSFAoMYmxvY2tfbnVtYmVyGAEgASgEEhIKCmJsb2NrX2hhc2gYAiABKAkiGQoHQm9vbGVhbhIOCgZyZXN1bHQYASABKAgiFwoFQXJyYXkSDgoGcmVzdWx0GAEgAygJQlBaTmdpdGh1Yi5jb20vc3RyZWFtaW5nZmFzdC9zdWJzdHJlYW1zL3BiL3NmL3N1YnN0cmVhbXMvdjEvdGVzdC87cGJzdWJzdHJlYW1zdGVzdGIGcHJvdG8z");
+  var file_sf_substreams_v1_test_test = /* @__PURE__ */ fileDesc("CiBzZi9zdWJzdHJlYW1zL3YxL3Rlc3QvdGVzdC5wcm90bxIVc2Yuc3Vic3RyZWFtcy52MS50ZXN0IiMKBUJsb2NrEgoKAmlkGAEgASgJEg4KBm51bWJlchgCIAEoBCI1CglNYXBSZXN1bHQSFAoMYmxvY2tfbnVtYmVyGAEgASgEEhIKCmJsb2NrX2hhc2gYAiABKAkiGQoHQm9vbGVhbhIOCgZyZXN1bHQYASABKAgiFwoFQXJyYXkSDgoGcmVzdWx0GAEgAygJIhsKCkludDY0VmFsdWUSDQoFdmFsdWUYASABKANCUFpOZ2l0aHViLmNvbS9zdHJlYW1pbmdmYXN0L3N1YnN0cmVhbXMvcGIvc2Yvc3Vic3RyZWFtcy92MS90ZXN0LztwYnN1YnN0cmVhbXN0ZXN0YgZwcm90bzM");
   var BlockSchema = /* @__PURE__ */ messageDesc2(file_sf_substreams_v1_test_test, 0);
   var MapResultSchema = /* @__PURE__ */ messageDesc2(file_sf_substreams_v1_test_test, 1);
 
@@ -3485,6 +3491,10 @@
         blockHash: clock.id
       });
     }
+    js_store_source_key(store, blk) {
+      const key = `block_${blk.number}`;
+      store.set(0, key, { value: BigInt(0) });
+    }
   };
   __decorateClass([
     substreams.handlers.map([BlockSchema], MapResultSchema)
@@ -3492,4 +3502,7 @@
   __decorateClass([
     substreams.handlers.map([BlockSchema], MapResultSchema)
   ], Substreams.prototype, "js_test_map_clock", 1);
+  __decorateClass([
+    substreams.handlers.store([BlockSchema], BlockSchema)
+  ], Substreams.prototype, "js_store_source_key", 1);
 })();

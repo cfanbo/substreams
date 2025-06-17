@@ -20,3 +20,7 @@ message Boolean {
 message Array {
   repeated string result = 1;
 }
+
+message Int64Value {
+  int64 value = 1;
+}
