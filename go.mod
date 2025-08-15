@@ -13,6 +13,7 @@ require (
 	github.com/streamingfast/dbin v0.9.1-0.20231117225723-59790c798e2c
 	github.com/streamingfast/derr v0.0.0-20250321151415-6b4fbbcb1bb5
 	github.com/streamingfast/dgrpc v0.0.0-20250423172640-223250ed2391
+	github.com/streamingfast/dhttp v0.0.0-20240627175716-5d2b5e1b2c9c
 	github.com/streamingfast/dstore v0.1.1-0.20250609173504-95368d3441ee
 	github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091
 	github.com/streamingfast/pbgo v0.0.6-0.20240823134334-812f6a16c5cb
@@ -220,3 +221,4 @@ replace (
 	github.com/yourbasic/graph v0.0.0-20210606180040-8ecfec1c2869 => github.com/streamingfast/graph v0.0.0-20220329181048-a5710712d873
 	rogchap.com/v8go => github.com/streamingfast/v8go v0.0.0-20250609192103-f9b5beca42f2
 )
+
