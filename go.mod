@@ -1,6 +1,6 @@
 module github.com/streamingfast/substreams
 
-go 1.24
+go 1.19
 
 require (
 	github.com/golang/protobuf v1.5.4
@@ -216,7 +216,7 @@ require (
 retract v1.0.2 // Published at wrong tag.
 
 replace (
-	github.com/jhump/protoreflect => github.com/streamingfast/protoreflect v0.0.0-20231205191344-4b629d20ce8d
+	github.com/jhump/protoreflect => github.com/streamingfast/protoreflect v0.0.0-20250903194609-00137dbe5309
 	github.com/yourbasic/graph v0.0.0-20210606180040-8ecfec1c2869 => github.com/streamingfast/graph v0.0.0-20220329181048-a5710712d873
 	rogchap.com/v8go => github.com/streamingfast/v8go v0.0.0-20250609192103-f9b5beca42f2
 )
