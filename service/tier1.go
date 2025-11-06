@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,6 +32,7 @@ import (
 	"github.com/streamingfast/shutter"
 	"github.com/streamingfast/substreams"
 	"github.com/streamingfast/substreams/client"
+	"github.com/streamingfast/substreams/debugapi"
 	"github.com/streamingfast/substreams/manifest"
 	"github.com/streamingfast/substreams/metering"
 	"github.com/streamingfast/substreams/metrics"
@@ -43,6 +46,7 @@ import (
 	"github.com/streamingfast/substreams/pipeline/cache"
 	"github.com/streamingfast/substreams/pipeline/exec"
 	"github.com/streamingfast/substreams/reqctx"
+	"github.com/streamingfast/substreams/service/active_requests"
 	"github.com/streamingfast/substreams/service/config"
 	"github.com/streamingfast/substreams/storage/execout"
 	"github.com/streamingfast/substreams/storage/store"
@@ -85,6 +89,7 @@ type Tier1Service struct {
 	tier2RequestParameters  reqctx.Tier2RequestParameters
 	foundationalEndpoints   map[string]string
 	sessionPool             dsession.SessionPool
+	activeRequestsManager   *active_requests.ActiveRequestsManager // we keep a list of current requests for the debugAPI and to manage memory
 }
 
 func getBlockTypeFromStreamFactory(sf *StreamFactory) (string, error) {
@@ -203,10 +208,23 @@ func NewTier1(
 		activeRequestsHardLimit: activeRequestsHardLimit,
 		foundationalEndpoints:   foundationalEndpoints,
 		sessionPool:             sessionPool,
+		activeRequestsManager:   active_requests.NewActiveRequestsManager(logger),
 	}
 	s.OnTerminating(func(_ error) {
 		s.activeRequests.Wait()
 	})
+
+	if debugAPIAddress := os.Getenv("SUBSTREAMS_DEBUG_API_ADDR"); debugAPIAddress != "" {
+		debugAPI := debugapi.New(
+			debugAPIAddress,
+			logger,
+			nil, // not used on tier1
+			nil,
+			s.listActiveRecords,
+			s.cancelRequest,
+		)
+		debugAPI.Start()
+	}
 
 	go func() {
 		if sharedCacheSize == 0 {
@@ -845,6 +863,21 @@ func (s *Tier1Service) blocks(ctx context.Context, cancelRunning context.CancelC
 		}()
 	}
 
+	traceID := tracing.GetTraceID(ctx).String()
+	activeReqHandler := s.activeRequestsManager.Add(
+		cancelRunning,
+		traceID,
+		reqctx.OutputModuleHash(ctx),
+		0, // not used on tier1
+		0,
+		0,
+	)
+	defer func() {
+		s.activeRequestsManager.Remove(activeReqHandler)
+		cancelRunning(context.Canceled) // in case nothing canceled it before
+	}()
+	ctx = reqctx.WithActiveRequestsHandler(ctx, activeReqHandler)
+
 	logger.Info("incoming Substreams Blocks request", logFields...)
 
 	defer func() {
@@ -1303,6 +1336,24 @@ func (s *Tier1Service) getOverloadedStatus() (status overloadingStatus) {
 		softLimit:          s.activeRequestsSoftLimit,
 		hardLimit:          s.activeRequestsHardLimit,
 	}
+}
+
+func (s *Tier1Service) listActiveRecords() string {
+	b, err := json.Marshal(s.activeRequestsManager.List())
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
+}
+
+func (s *Tier1Service) cancelRequest(traceID string, outputModuleHash string, segmentNumber, segmentSize *uint64, stage *uint32) []string {
+	return s.activeRequestsManager.CancelRequest(
+		traceID,
+		outputModuleHash,
+		segmentNumber,
+		segmentSize,
+		stage,
+	)
 }
 
 func (s *Tier1Service) getActiveRequestCount() int {

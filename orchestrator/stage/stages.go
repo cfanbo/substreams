@@ -17,6 +17,7 @@ import (
 	pbsubstreamsrpc "github.com/streamingfast/substreams/pb/sf/substreams/rpc/v2"
 	"github.com/streamingfast/substreams/pipeline/exec"
 	"github.com/streamingfast/substreams/reqctx"
+	"github.com/streamingfast/substreams/service/active_requests"
 	"github.com/streamingfast/substreams/storage/execout"
 	"github.com/streamingfast/substreams/storage/store"
 )
@@ -583,11 +584,17 @@ func (s *Stages) FinalStoreMap(exclusiveEndBlock uint64) (store.Map, error) {
 	runtime.ReadMemStats(&m)
 	s.logger.Info("about to load stores", zap.Uint64("total_store_size", totalStoreSize/1024/1024), zap.Uint64("used_memory_mb", m.HeapInuse/1024/1024))
 
+	if reqHandler := reqctx.ActiveRequestsHandler(s.ctx); reqHandler != nil {
+		if !reqHandler.CheckAvailable(totalStoreSize) {
+			return nil, active_requests.ErrInstanceOutOfMemory
+		}
+	}
+
 	for _, modState := range storeModuleStates {
 		modState := modState
 		go func() {
 			fullKV, err := modState.getStore(s.ctx, exclusiveEndBlock)
-			loadingChan <- loadedStore{
+			loaded := loadedStore{
 				name: modState.name,
 				kv:   fullKV,
 				err:  err,
@@ -603,12 +610,32 @@ func (s *Stages) FinalStoreMap(exclusiveEndBlock uint64) (store.Map, error) {
 			}
 			fullKV.Store().SetMetadata(s.ctx, fullKV.Filename(), met)
 
+			select {
+			case loadingChan <- loaded:
+			case <-s.ctx.Done():
+				return
+			}
 		}()
 	}
 
 	runtime.ReadMemStats(&m)
 	s.logger.Info("after loading stores", zap.Uint64("total_store_size", totalStoreSize/1024/1024), zap.Uint64("used_memory_mb", m.HeapInuse/1024/1024))
 	var errs error
+	for i := 0; i < len(storeModuleStates); i++ {
+		select {
+		case loaded := <-loadingChan:
+			if loaded.err != nil {
+				errs = errors.Join(errs, fmt.Errorf("while loading %s: %w", loaded.name, loaded.err))
+				continue
+			}
+			out[loaded.name] = loaded.kv
+			if len(out) == len(storeModuleStates) {
+				close(loadingChan)
+			}
+		case <-s.ctx.Done():
+			return nil, s.ctx.Err()
+		}
+	}
 	for loaded := range loadingChan {
 		if loaded.err != nil {
 			errs = errors.Join(errs, fmt.Errorf("while loading %s: %w", loaded.name, loaded.err))
