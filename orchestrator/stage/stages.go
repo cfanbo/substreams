@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -182,14 +183,12 @@ func (s *Stages) AllStoresCompleted() bool {
 	}
 	lastSegment := s.storeSegmenter.LastIndex()
 
-	fmt.Println("----------------------------------")
 	for idx, stage := range s.stages {
 		if stage.kind != KindStore {
 			continue
 		}
 		for seg := s.storeSegmenter.FirstIndex(); seg <= lastSegment; seg++ {
 			state := s.getState(Unit{Segment: seg, Stage: idx})
-			fmt.Println("stage: ", idx, "segment: ", seg, "status:", state)
 			if state != UnitCompleted && state != UnitNoOp {
 				return false
 			}
@@ -568,6 +567,22 @@ func (s *Stages) FinalStoreMap(exclusiveEndBlock uint64) (store.Map, error) {
 	}
 
 	loadingChan := make(chan loadedStore, len(storeModuleStates))
+
+	storesMetadata := make(map[string]map[string]string)
+	var totalStoreSize uint64
+	for _, modState := range storeModuleStates {
+		size, metadata, err := modState.estimateStoreSizeBytes(s.ctx, exclusiveEndBlock)
+		if err != nil {
+			return nil, err
+		}
+		totalStoreSize += size
+		storesMetadata[modState.name] = metadata
+	}
+
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	s.logger.Info("about to load stores", zap.Uint64("total_store_size", totalStoreSize/1024/1024), zap.Uint64("used_memory_mb", m.HeapInuse/1024/1024))
+
 	for _, modState := range storeModuleStates {
 		modState := modState
 		go func() {
@@ -577,9 +592,22 @@ func (s *Stages) FinalStoreMap(exclusiveEndBlock uint64) (store.Map, error) {
 				kv:   fullKV,
 				err:  err,
 			}
+
+			//  add loaded file size to metadata
+			met := storesMetadata[modState.name]
+			if met == nil {
+				met = make(map[string]string)
+			}
+			if met["datasize"] == "" {
+				met["datasize"] = fmt.Sprintf("%d", fullKV.SizeBytes())
+			}
+			fullKV.Store().SetMetadata(s.ctx, fullKV.Filename(), met)
+
 		}()
 	}
 
+	runtime.ReadMemStats(&m)
+	s.logger.Info("after loading stores", zap.Uint64("total_store_size", totalStoreSize/1024/1024), zap.Uint64("used_memory_mb", m.HeapInuse/1024/1024))
 	var errs error
 	for loaded := range loadingChan {
 		if loaded.err != nil {

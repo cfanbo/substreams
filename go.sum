@@ -516,8 +516,8 @@ github.com/streamingfast/dmetrics v0.0.0-20250711072030-f023e918a175 h1:pqgbZm2A
 github.com/streamingfast/dmetrics v0.0.0-20250711072030-f023e918a175/go.mod h1:JbxEDbzWRG1dHdNIPrYfuPllEkktZMgm40AwVIBENcw=
 github.com/streamingfast/dsession v0.0.0-20251029144057-b94d1030e142 h1:mgPawX0VOgrG2LHSc6EfY15r0x3AO/GK6LY58io3/+4=
 github.com/streamingfast/dsession v0.0.0-20251029144057-b94d1030e142/go.mod h1:ldDwFqr20xXyaLhwDm7XlMaf2vvoZNOrjgsMcFJGtrw=
-github.com/streamingfast/dstore v0.1.1-0.20250609173504-95368d3441ee h1:f0fDCbCNpdMQ0yCB4RqzaOiBbSwe03ejljyxiiaMdHE=
-github.com/streamingfast/dstore v0.1.1-0.20250609173504-95368d3441ee/go.mod h1:FKF6+noY/Qgf+1EgeyQdQllQpmCvKQ6bghSbqRYJhlw=
+github.com/streamingfast/dstore v0.1.1-0.20251105221635-c60b9e8af972 h1:Wfu9Q6da+iZpuzU/IAE6LaS5CC04rCKMLCDUubtZ20w=
+github.com/streamingfast/dstore v0.1.1-0.20251105221635-c60b9e8af972/go.mod h1:FKF6+noY/Qgf+1EgeyQdQllQpmCvKQ6bghSbqRYJhlw=
 github.com/streamingfast/firehose-networks v0.2.0 h1:w5YeAmFXvQx+gGd0PnY6sT/pQ4koxGqf1T63+PeqewY=
 github.com/streamingfast/firehose-networks v0.2.0/go.mod h1:/XyroRcAUOO9DdxdgHktuVI1U6uKgjj6+1r+zgLEb90=
 github.com/streamingfast/graph v0.0.0-20220329181048-a5710712d873 h1:8+TXT26c2p6f8JMg0w4JQ8t4fAbfMmR11zLN4KFVRC8=
@@ -536,8 +536,6 @@ github.com/streamingfast/sf-tracing v0.0.0-20240430173521-888827872b90 h1:94Hllk
 github.com/streamingfast/sf-tracing v0.0.0-20240430173521-888827872b90/go.mod h1:e6tKS/udlfXFUTQBYfDDdISfjULvQXet1kBrOeRfgI4=
 github.com/streamingfast/shutter v1.5.0 h1:NpzDYzj0HVpSiDJVO/FFSL6QIK/YKOxY0gJAtyaTOgs=
 github.com/streamingfast/shutter v1.5.0/go.mod h1:B/T6efqdeMGbGwjzPS1ToXzYZI4kDzI5/u4I+7qbjY8=
-github.com/streamingfast/substreams-foundational-store v0.1.1-0.20251017155401-352038f44dd2 h1:ITbD/TRl6Y7aKmNp/Wf6ydTLhCF7bNntlAotyDjmQoI=
-github.com/streamingfast/substreams-foundational-store v0.1.1-0.20251017155401-352038f44dd2/go.mod h1:VPymz8cI6vAKE1xuTqf1Yg1pULKB8Vf9vyGm1+C0Evo=
 github.com/streamingfast/substreams-sdk-go v0.0.0-20240110154316-5fb21a7a330b h1:O00ZKnNHVHrIEzS/dr+w07H3c0qP2JZwE6XS9scJZSY=
 github.com/streamingfast/substreams-sdk-go v0.0.0-20240110154316-5fb21a7a330b/go.mod h1:TJXOmIAPY+FJvosBoMAiQeZzi32QiBXzCTSgVsss9Oo=
 github.com/streamingfast/substreams-sink-sql v1.0.1-0.20231127153906-acf5f3e34330 h1:svW/I3N8vW2JqJwE/cWXiULOEZi6eslxA60xHVqDaXk=

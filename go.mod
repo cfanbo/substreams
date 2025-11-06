@@ -16,7 +16,7 @@ require (
 	github.com/streamingfast/derr v0.0.0-20250321151415-6b4fbbcb1bb5
 	github.com/streamingfast/dgrpc v0.0.0-20250423172640-223250ed2391
 	github.com/streamingfast/dhttp v0.1.2
-	github.com/streamingfast/dstore v0.1.1-0.20250609173504-95368d3441ee
+	github.com/streamingfast/dstore v0.1.1-0.20251105221635-c60b9e8af972
 	github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091
 	github.com/streamingfast/pbgo v0.0.6-0.20240823134334-812f6a16c5cb
 	github.com/stretchr/testify v1.11.1
@@ -69,7 +69,6 @@ require (
 	github.com/streamingfast/firehose-networks v0.2.0
 	github.com/streamingfast/sf-tracing v0.0.0-20240430173521-888827872b90
 	github.com/streamingfast/shutter v1.5.0
-	github.com/streamingfast/substreams-foundational-store v0.1.1-0.20251017155401-352038f44dd2
 	github.com/streamingfast/substreams-sdk-go v0.0.0-20240110154316-5fb21a7a330b
 	github.com/streamingfast/substreams-sink-sql v1.0.1-0.20231127153906-acf5f3e34330
 	github.com/test-go/testify v1.1.4
