@@ -121,9 +121,6 @@ func (s *FullKV) Load(ctx context.Context, file *FileInfo) error {
 		return err
 	}
 
-	//if reqHandler := reqctx.ActiveRequestsHandler(ctx); reqHandler != nil {
-	//	reqHandler.AdjustFullKVSize(size)
-	//}
 	s.kv = storeData.Kv
 	s.totalSizeBytes = size
 	if s.kv == nil {

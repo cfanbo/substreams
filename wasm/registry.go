@@ -54,7 +54,7 @@ func (r *Registry) NewModule(ctx context.Context, wasmCode []byte, wasmCodeType 
 
 func NewRegistry(extensions map[string]map[string]WASMExtension) *Registry {
 
-	defaultRuntime := "wasmtime"
+	defaultRuntime := "wazero"
 
 	if selectRuntime := os.Getenv("SUBSTREAMS_WASM_RUNTIME"); selectRuntime != "" {
 		selectedRuntime := runtimes[selectRuntime]
