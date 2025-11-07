@@ -5,21 +5,45 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/dustin/go-humanize"
+	"github.com/pbnjay/memory"
 	"go.uber.org/zap"
 )
 
-var hardStoreSizeEnforce = os.Getenv("HARD_STORE_SIZE_ENFORCE") == "true"
+var GB = uint64(1024 * 1024 * 1024)
+
+var enforceStoreSizeLimitPerRequest = os.Getenv("SUBSTREAMS_ENFORCE_STORE_SIZE_LIMIT_PER_REQUEST") == "true"
+var enforceStoreSizeLimit = os.Getenv("SUBSTREAMS_ENFORCE_STORE_SIZE_LIMIT_TOTAL") == "true"
+var storeSizeLimitPerRequest = parseUint64EnvVar("SUBSTREAMS_STORE_SIZE_LIMIT_PER_REQUEST", 5*GB)
+var storeSizeLimitTotal = parseUint64EnvVar("SUBSTREAMS_STORE_SIZE_LIMIT_TOTAL", 30*GB)
+
+func parseUint64EnvVar(envVar string, defaultValue uint64) uint64 {
+	if val := os.Getenv(envVar); val != "" {
+		if parsed, err := strconv.ParseUint(val, 10, 64); err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
 
 func NewActiveRequestsManager(logger *zap.Logger) *ActiveRequestsManager {
+	fmt.Println("free memory", memory.FreeMemory())
+	//l, err := memlimit.FromSystem()
+	//if err != nil {
+	//	logger.Error("failed to get memory limit", zap.Error(err))
+	//} else {
+	//	logger.Info("memory limit", zap.Uint64("limit", l))
+	//}
 	return &ActiveRequestsManager{
 		reqs:                   make(map[string]*activeRequestRecord),
 		logger:                 logger,
-		maxStoreSizePerRequest: 5000000000,
-		maxStoreSize:           12000000000,
+		maxStoreSizePerRequest: storeSizeLimitPerRequest,
+		maxStoreSize:           storeSizeLimitTotal,
 	}
 }
 
@@ -55,44 +79,45 @@ type activeRequestRecord struct {
 
 var ErrInstanceOutOfMemory = errors.New("instance out of memory")
 
-func (arh *ActiveRequestsHandler) currentTotalLoadedSize() (totalSize uint64) {
+func (arh *ActiveRequestsHandler) totalLoadedSize() (totalSize uint64) {
 	for _, req := range arh.manager.reqs {
 		totalSize += req.FullKVStoreMemoryBytes
 	}
 	return totalSize
 }
 
-func (arh *ActiveRequestsHandler) CheckAvailable(size uint64) bool {
-	totalSize := arh.currentTotalLoadedSize()
-	return totalSize+size <= arh.manager.maxStoreSize
+func (arh *ActiveRequestsHandler) AdjustFullKVSize(size uint64) {
+	arh.manager.Lock()
+	defer arh.manager.Unlock()
+	if req := arh.manager.reqs[arh.uniqueID]; req != nil {
+	}
 }
 
-func (arh *ActiveRequestsHandler) LoadedFullKV(size uint64) {
+func (arh *ActiveRequestsHandler) AllocateFullKVSize(size uint64) {
 	if size == 0 {
 		return
 	}
 	arh.manager.Lock()
 	defer arh.manager.Unlock()
 	if req := arh.manager.reqs[arh.uniqueID]; req != nil {
-		req.FullKVStoreMemoryBytes += size
+
 		if size > arh.manager.maxStoreSizePerRequest {
-			arh.manager.logger.Warn("sum of used stores is too big", zap.String("uniqueID", arh.uniqueID), zap.Uint64("size", size), zap.Uint64("totalBytes", req.FullKVStoreMemoryBytes))
-			if hardStoreSizeEnforce {
-				req.cancelFunc(connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("sum of all stores became too big, above maximum size: %d, (deterministic error)", arh.manager.maxStoreSizePerRequest)))
+			arh.manager.logger.Warn("size of stores used in this request is above maximum", zap.String("uniqueID", arh.uniqueID), zap.Uint64("size", size), zap.Uint64("totalBytes", arh.manager.maxStoreSizePerRequest))
+			if enforceStoreSizeLimitPerRequest {
+				req.cancelFunc(connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("size of stores used in this request is %q, above maximum: %q, (deterministic error)", humanize.Bytes(size), humanize.Bytes(arh.manager.maxStoreSizePerRequest))))
 			}
 			return
 		}
 
-		var totalSize uint64
-		for _, req := range arh.manager.reqs {
-			totalSize += req.FullKVStoreMemoryBytes
-		}
-		if totalSize > arh.manager.maxStoreSize {
-			arh.manager.logger.Warn("sum of used stores on all requests is too big", zap.String("uniqueID", arh.uniqueID), zap.Uint64("size", size), zap.Uint64("totalBytes", totalSize))
-			if hardStoreSizeEnforce {
+		totalSize := arh.totalLoadedSize()
+		if totalSize+size > arh.manager.maxStoreSize {
+			arh.manager.logger.Warn("size of all stores used in this instance is above maximum", zap.String("uniqueID", arh.uniqueID), zap.Uint64("total_size", totalSize), zap.Uint64("requested_size", size), zap.Uint64("totalBytes", arh.manager.maxStoreSize))
+			if enforceStoreSizeLimit {
 				req.cancelFunc(connect.NewError(connect.CodeResourceExhausted, ErrInstanceOutOfMemory))
 			}
 		}
+
+		req.FullKVStoreMemoryBytes += size
 	} else {
 		arh.manager.logger.Warn("LoadedFullKV called for unknown request", zap.String("uniqueID", arh.uniqueID))
 	}

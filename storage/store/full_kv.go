@@ -7,7 +7,6 @@ import (
 
 	"github.com/streamingfast/dstore"
 	pbssinternal "github.com/streamingfast/substreams/pb/sf/substreams/intern/v2"
-	"github.com/streamingfast/substreams/reqctx"
 	"github.com/streamingfast/substreams/storage/store/marshaller"
 	"go.uber.org/zap"
 )
@@ -122,9 +121,9 @@ func (s *FullKV) Load(ctx context.Context, file *FileInfo) error {
 		return err
 	}
 
-	if reqHandler := reqctx.ActiveRequestsHandler(ctx); reqHandler != nil {
-		reqHandler.LoadedFullKV(size)
-	}
+	//if reqHandler := reqctx.ActiveRequestsHandler(ctx); reqHandler != nil {
+	//	reqHandler.AdjustFullKVSize(size)
+	//}
 	s.kv = storeData.Kv
 	s.totalSizeBytes = size
 	if s.kv == nil {

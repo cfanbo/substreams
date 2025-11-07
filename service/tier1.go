@@ -864,19 +864,29 @@ func (s *Tier1Service) blocks(ctx context.Context, cancelRunning context.CancelC
 	}
 
 	traceID := tracing.GetTraceID(ctx).String()
-	activeReqHandler := s.activeRequestsManager.Add(
-		cancelRunning,
-		traceID,
-		reqctx.OutputModuleHash(ctx),
-		0, // not used on tier1
-		0,
-		0,
-	)
-	defer func() {
-		s.activeRequestsManager.Remove(activeReqHandler)
-		cancelRunning(context.Canceled) // in case nothing canceled it before
-	}()
-	ctx = reqctx.WithActiveRequestsHandler(ctx, activeReqHandler)
+
+	if s.activeRequestsManager != nil {
+		activeReqHandler := s.activeRequestsManager.Add(
+			cancelRunning,
+			traceID,
+			reqctx.OutputModuleHash(ctx),
+			0, // not used on tier1
+			0,
+			0,
+		)
+		defer func() {
+			s.activeRequestsManager.Remove(activeReqHandler)
+			cancelRunning(context.Canceled) // in case nothing canceled it before
+		}()
+		ctx = reqctx.WithActiveRequestsHandler(ctx, activeReqHandler)
+	} else {
+		// we put this here, even if it is unrelated, to avoid setting more than one function to defer
+		defer func() {
+			if cancelRunning != nil { // in tests, this might be nil
+				cancelRunning(err)
+			}
+		}()
+	}
 
 	logger.Info("incoming Substreams Blocks request", logFields...)
 
